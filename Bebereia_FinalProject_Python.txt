@@ -1,0 +1,524 @@
+from tkinter import *
+from tkinter import ttk
+import re
+
+
+def convert(tokens):
+  """ convert lexer output to parser input 
+      e.g. ['<keyword,int>',...] -> [('keyword','int'),...]
+  """
+  new_tokens = []
+  for token in tokens:
+    t = token[1:-1]  # strip off < and >
+    parts = t.split(',')
+    new_tokens.append((parts[0], parts[1]))
+  return new_tokens
+
+
+def CutOneLineTokens(s):
+  tokens = []
+  patt_kw = r'(if +|else +|int +|float +|print+ |string+)'
+  patt_sep = r'[\(\)\:;]'
+  patt_ops = r'[+=>\*]'
+  patt_ident = r'([A-z]+\d*)'
+  patt_int = r'(\d+)'
+  patt_float = r'(\d+\.\d+)'
+  patt_string = r'\"[^\"]*\"'
+  
+  while True:
+    s = s.strip()
+    if len(s) == 0:
+      break  # done parsing
+    # keyword
+    m = re.match(patt_kw, s)
+    if m:
+      kw = m.group().strip()
+      tokens.append('<keyword,' + kw + '>')
+      s = s[m.end():]
+      continue
+    # seperator
+    m = re.match(patt_sep, s)
+    if m:
+      sr = m.group()
+      tokens.append('<seperator,' + sr + '>')
+      s = s[m.end():]
+      continue
+    # operator
+    m = re.match(patt_ops, s)
+    if m:
+      op = m.group()
+      tokens.append('<operator,' + op + '>')
+      s = s[m.end():]
+      continue
+    # identifier
+    m = re.match(patt_ident, s)
+    if m:
+      iden = m.group()
+      tokens.append('<identifier,' + iden + '>')
+      s = s[m.end():]
+      continue
+
+    # float
+    m = re.match(patt_float, s)
+    if m:
+      sewer = m.group()
+      tokens.append('<float,' + sewer + '>')
+      s = s[m.end():]
+      continue
+    # integer
+    m = re.match(patt_int, s)
+    if m:
+      aaa = m.group()
+      tokens.append('<integer,' + aaa + '>')
+      s = s[m.end():]
+      continue
+
+    # string
+    print(s)
+    m = re.match(patt_string, s)
+    if m:
+      cat = m.group()
+      tokens.append('<separator,">')
+      tokens.append('<string,' + cat[1:-1] + '>')
+      tokens.append('<separator,">')
+      s = s[m.end():]
+      continue
+
+  return tokens
+
+
+def Parser(p):
+  global inT, tree, Mytokens, open_mult_paren, otherTree
+  open_mult_paren = False
+  tree = []
+  otherTree = []
+  Mytokens = p
+  getToken()
+  exp()
+  if (inT[1] == ";"):
+    print("\nparse tree building success!")
+  return tree, otherTree
+
+def getToken():
+  global inT, Mytokens
+  inT = Mytokens.pop(0)
+  print("     accept token from the list:", inT)
+
+def exp():
+  #root = Node("Expression")
+  print("\n----parent node exp, finding children nodes:")
+  global inT, tree, add_tree, otherTree
+  add_tree = True
+  if (inT[0] == "keyword"):
+    print("child node (internal): keyword")
+    print("   keyword has child node (token):", inT)
+    otherTree.extend(["(","keyword","("])
+    root.insert("keyword")
+    accept(inT[1])
+    root.insert(inT[1])
+    otherTree.extend([")",")"])
+  if (inT[0] == "identifier"):
+    print("child node (internal): identifier")
+    print("   identifier has child node (token):", inT)
+    otherTree.extend(["(","identifier","("])
+    root.insert("identifier")
+    accept(inT[1])
+    root.insert(inT[1])
+    otherTree.extend([")",")"])
+  expr = False
+  if (inT[1] == "="):
+    print("child node (token):" + inT[1])
+    otherTree.extend(["(","operator","(",])
+    root.insert("operator")
+    accept("=")
+    if (inT[1] == '"'):
+      otherTree.extend([")",")","(","string expression"])
+      root.insert("string expression")
+    else:
+      otherTree.extend([")",")","(","math expression"])
+      root.insert("math expression")
+    expr = True
+  print("Child node (internal): math")
+  
+  math()
+  if expr:
+    otherTree.append(")")
+  
+
+def math():
+  print("\n----parent node math, finding children nodes:")
+  global inT, tree, add_tree, otherTree
+  if (add_tree is True):
+    if ((inT[0] == "float") is True):
+      tree.append(inT[1])
+      otherTree.extend(["(","float","(",])
+      root.insert("float")
+      otherTree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+    elif ((inT[0] == "integer") is True):
+      tree.append(inT[1])
+      otherTree.extend(["(","integer","(",])
+      root.insert("integer")
+      otherTree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+    elif ((inT[0] == "separator") and (inT[1] == '"')):
+      otherTree.extend(["(","separator","(",])
+      root.insert("seperator")
+      tree.append(inT[1])
+      otherTree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+      getToken()
+      otherTree.extend(["(","string","(",])
+      root.insert("string")
+      tree.append(inT[1])
+      otherTree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+      getToken()
+      otherTree.extend(["(","seperator","(",])
+      root.insert("seperator")
+      tree.append(inT[1])
+      otherTree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+      getToken()
+    else:
+      tree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend(["(","string","(",])
+      otherTree.append(inT[1])
+      root.insert("string")
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+  else:
+    add_tree = True
+  if (inT[0] == "float"):
+    print("child node (internal): float")
+    print("   float has child node (token):" + inT[1])
+    
+    getToken()
+    
+  elif (inT[0] == "integer"):
+    print("child node (internal): int")
+    print("   int has child node (token):" + inT[1])
+    getToken()
+
+  if (inT[1] == "+"):
+    print("child node (token):" + inT[1])
+    otherTree.extend(["(","operator","(",])
+    accept("+")
+    root.insert("+")
+    otherTree.extend([")",")"])
+    print("child node (internal): math")
+    math()
+  if (inT[1] == ";"):
+    return
+  add_tree = False
+  multi()
+
+
+def multi():
+  global inT, open_mult_paren
+  if (inT[1] != "*"):
+    if ((inT[0] == "float") is True):
+      tree.append(inT[1])
+      root.insert(inT[1])
+      otherTree.extend(["(","float","(",])
+      otherTree.append(inT[1])
+      root.insert("float")
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+    elif ((inT[0] == "integer") is True):
+      tree.append(inT[1])
+      otherTree.extend(["(","integer","(",])
+      otherTree.append(inT[1])
+      root.insert("integer")
+      root.insert(inT[1])
+      otherTree.extend([")",")"])
+    else:
+      print("245: inT", inT)
+
+  elif (inT[0] == "int" or inT[0] == "float"):
+    token = inT[1]
+    print(f"  int has child node (token):{token}")
+    accept(inT[1])
+    root.insert(inT[1])
+    
+  if (inT[1] == "*"):
+    temp = tree[len(tree)-1]
+    tree[len(tree)-1] = '('
+    tree.append(temp)
+    root.insert(temp)
+    otherTree.insert(-5,"math expression:")
+    root.insert("math expression")
+    otherTree.insert(-5,"(")
+    otherTree.extend(["(","operator","(",])
+    root.insert("operator")
+    accept("*")
+    root.insert("*")
+    otherTree.extend([")",")"])
+    multi()
+    tree.append(")")
+    otherTree.append(")")
+    math()
+  elif (inT[1] == "+"):
+    otherTree.extend(["(","operator","(",])
+    accept("+")
+    root.insert("+")
+    otherTree.extend([")",")"])
+    math()
+    multi()
+
+def accept(t):
+  global inT, tree, otherTree
+  tree.append(t)
+  otherTree.append(t)
+  root.insert(t)
+  getToken()
+
+
+class CodeDatabase:
+
+  def __init__(self):
+    self.tinyPie = []
+
+  def add_code(self, codeinfo):
+    self.tinyPie.append(codeinfo)
+
+  def print_code_database(self):
+    codestart = -1
+    codeend = 0
+    for codeinfo in self.tinyPie:
+      codestart + 1
+      codeend + 1
+      if (codeinfo is not None):
+        print(codeinfo[codeend] + ",000" + codeinfo[codestart])
+
+#parser tree making start
+class Node:
+  def __init__(self,data):
+    self.left = None
+    self.right = None
+    self.middle = None
+    self.extra = None
+    self.data = data
+
+  def insert(self,data):
+    if self.data:
+      if self.left is None:
+        self.left = Node(data)
+      elif self.left.middle is None:
+        self.left.middle = Node(data)
+      elif self.middle is None:
+        self.middle = Node(data)
+      elif self.middle.middle is None:
+        self.middle.middle = Node(data)
+      elif self.extra is None:
+        self.extra = Node(data)
+      elif self.extra.middle is None:
+        self.extra.middle = Node(data)
+      elif self.right is None:
+        self.right = Node(data)
+      else:
+        if self.right.left is None:
+          self.right.left = Node(data)
+        elif self.right.left.middle is None:
+          self.right.left.middle = Node(data)
+        elif self.right.middle is None:
+          self.right.middle = Node(data)
+        elif self.right.middle.middle is None:
+          self.right.middle.middle = Node(data)
+        elif self.right.right is None:
+          self.right.right = Node(data)
+        else:
+          if self.right.right.left is None:
+            self.right.right.left = Node(data)
+          elif self.right.right.left.middle is None:
+            self.right.right.left.middle = Node(data)
+          elif self.right.right.middle is None:
+            self.right.right.middle = Node(data)
+          elif self.right.right.middle.middle is None:
+            self.right.right.middle.middle = Node(data)
+          elif self.right.right.right is None:
+            self.right.right.right = Node(data)
+          else:
+            if self.right.right.right.left is None:
+              self.right.right.right.left = Node(data)
+            elif self.right.right.right.left.middle is None:
+              self.right.right.right.left.middle = Node(data)
+            elif self.right.right.right.middle is None:
+              self.right.right.right.middle = Node(data)
+            elif self.right.right.right.middle.middle is None:
+              self.right.right.right.middle.middle = Node(data)
+            elif self.right.right.right.right is None:
+              self.right.right.right.right = Node(data)
+            else:
+              if self.right.right.right.right.left is None:
+                self.right.right.right.right.left = Node(data)
+              elif self.right.right.right.right.left.middle is None:
+                self.right.right.right.right.left.middle = Node(data)
+              elif self.right.right.right.right.middle is None:
+                self.right.right.right.right.middle = Node(data)
+              elif self.right.right.right.right.middle.middle is None:
+                self.right.right.right.right.middle.middle = Node(data)
+              elif self.right.right.right.right.right is None:
+                self.right.right.right.right.right = Node(data)
+              elif self.right.right.right.right.right.middle is None:
+                self.right.right.right.right.right.middle = Node(data)
+              #else:
+                #print ("Error 348")
+    #else:
+      #print("Error 350")
+       
+  def inorderTraversal(self, root):
+    res = []
+    if root:
+      res = self.inorderTraversal(root.left)
+      res.append(root.data)
+      res = res + self.inorderTraversal(root.right)
+    return res
+
+root = Node("Expression")
+
+class MyFirstGUI:  #class definition
+  #lineIndex = 0
+  #This is the initialize function for a class.
+  #Variables belonging to this class will get created and initialized in this function
+  #What is the self parameter? It represents this class itself.
+  #By using self.functionname, you can call functions belonging to this class.
+  #By using self.variablename, you can create and use variables belonging to this class.
+  #It needs to be the first parameter of all the functions in your class
+
+  def __init__(self, root):
+    #Master is the default prarent object of all widgets.
+    #You can think of it as the window that pops up when you run the GUI code.
+    self.lineIndex = 0
+    self.readingLineNum = 1.0
+    self.master = root
+    self.master.title("Lexical Analyzer for TinyPie")
+
+    #grid function puts a widget at a certain location
+    # return value is none, please do not use it like self.label=Label().grad()
+    #it will make self.label=none and you will no longer be able to change the label's content
+    self.label = Label(self.master, text="Source Code Input: ")
+    self.label.grid(row=0, column=0, sticky=E)
+
+    self.codeentry = Text(self.master, height=10, width=20)
+    self.codeentry.grid(row=1, column=0)
+
+    self.counter = Label(self.master, text="Currently Processing Line:")
+    self.counter.grid(row=4, column=0)
+
+    self.counterDisplay = Text(self.master, height=1, width=10)
+    self.counterDisplay.grid(row=4, column=1, sticky=W)
+
+    self.IDnum = Label(self.master, text="Lexical Analyzed Result: ")
+    self.IDnum.grid(row=0, column=1, sticky=E)
+
+    self.outputTextbox = Text(self.master, height=10, width=20)
+    self.outputTextbox.grid(row=1, column=1, sticky=E)
+
+    self.parserTree = Label(self.master, text="Parse Tree: ")
+    self.parserTree.grid(row=0, column=2, sticky=E)
+
+    self.parserTreebox = Text(self.master, height=10, width=30)
+    self.parserTreebox.grid(row=1, column=2, sticky=E)
+
+    self.parserTreeDrawn = Label(self.master, text="Parse Tree Drawn: ")
+    self.parserTreeDrawn.grid(row=2, column=0, sticky=W)
+    
+    self.treeview = ttk.Treeview(myTkRoot)  
+    self.treeview.grid(row=3, columnspan=4, sticky=W)  
+
+    self.submitbutton = Button(self.master,
+                               text="Next Line",
+                               command=self.submitname)
+    self.submitbutton.grid(row=5, column=0, sticky=E)
+
+    self.print_code_database = Button(self.master,
+                                      text="Quit",
+                                      command=self.master.destroy)
+    self.print_code_database.grid(row=5, column=2, sticky=W)
+
+    self.Regcodeentry = Label(self.master,
+                              text=self.codeentry.get('1.0', 'end-1c'))
+    self.Regcodeentry.grid(row=0, column=3, sticky=E)
+
+    self.mycode = CodeDatabase()
+
+    
+
+  def submitname(self):
+    if (self.codeentry.get('1.0', 'end-1c') == ""):
+      print("please enter a line of code")
+    if (self.codeentry.get('1.0', 'end-1c') != ""):
+      print("a line of code submitted:", self.codeentry.get('1.0', 'end-1c'))
+      self.clear_tree()
+      original = self.codeentry.get(self.readingLineNum,
+                                    self.readingLineNum + 1.0)
+      self.readingLineNum += 1.0
+      self.lineIndex += 1
+      tokens = CutOneLineTokens(original)
+      
+      self.counterDisplay.delete('1.0', 'end-1c')
+      self.counterDisplay.insert('end-1c', str(self.lineIndex))
+
+      tokens.append("---------")
+      for token in tokens:
+        self.outputTextbox.insert('end-1c', token + '\n')  
+      del(tokens[-1])#important
+      
+      tokens = convert(tokens)
+      parserTree, otherTree = Parser(tokens)  ###Parser Call###
+       
+      self.make_tree(otherTree)
+      
+      #ending tree widget
+
+    self.parserTreebox.insert('end-1c',"###Parser tree for line ")
+    self.parserTreebox.insert('end-1c',str(self.lineIndex))
+    self.parserTreebox.insert('end-1c',"###\n")
+    print("parserTree variable contains: ",parserTree)
+    self.parserTreebox.insert('end-1c',str(parserTree))
+
+    self.parserTreebox.insert('end-1c',"\n###End of tree for line ")
+    self.parserTreebox.insert('end-1c',str(self.lineIndex))
+    self.parserTreebox.insert('end-1c',"###\n")
+
+  def printdata(self):
+    self.mycode.print_code_database()
+
+  def clear_tree(self):
+    for item in self.treeview.get_children():
+      self.treeview.delete(item)
+
+  def make_tree(self,otherTree):
+    self.treeview.insert('', 0, 'item0', text ='Expression')
+    index = 1
+    parent_list = ['item0']  
+    while otherTree:
+      index += 1
+      item = otherTree.pop(0)
+      name = 'item' + str(index)
+      # down a level
+      if item == '(': 
+        new_parent_text = otherTree.pop(0)
+        self.treeview.insert(parent_list[-1],index, name, text=new_parent_text)
+        parent_list.append(name)
+        continue
+      # up a level
+      if item == ')':
+        parent_list.pop()
+        continue  
+      # add item
+      self.treeview.insert(parent_list[-1], index, name, text=item)
+
+if __name__ == '__main__':
+  myTkRoot = Tk()
+  my_gui = MyFirstGUI(myTkRoot)
+  myTkRoot.mainloop()
+
+
